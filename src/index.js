@@ -55,7 +55,9 @@ yargs(hideBin(process.argv))
                     throw new Error(`Source directory not found: ${sourceDir}`);
                 }
 
-                const translator = new Translator();
+                // Save translations.json in the source directory so it persists in the site repo
+                const cachePath = path.join(sourceDir, 'translations.json');
+                const translator = new Translator(cachePath);
                 const builder = new Builder(translator);
 
                 await builder.build({

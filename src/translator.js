@@ -33,6 +33,9 @@ export class Translator {
     }
 
     saveCache() {
+        const langKeys = Object.keys(this.cache);
+        const totalEntries = langKeys.reduce((sum, lang) => sum + Object.keys(this.cache[lang] || {}).length, 0);
+        console.log(`💾 Saving cache: ${totalEntries} entries to ${this.cacheFile}`);
         fs.writeJsonSync(this.cacheFile, this.cache, { spaces: 2 });
     }
 
@@ -105,8 +108,10 @@ Rules:
                 texts.forEach((original, index) => {
                     this.set(original, translations[index], targetLang);
                 });
+                console.log(`✅ Added ${texts.length} translations to cache for language: ${targetLang}`);
             } else {
                 console.error("Mismatch in translation count or format from Gemini");
+                console.error(`Expected ${texts.length} translations, got:`, translations);
             }
         } catch (error) {
             console.error("Translation error:", error);
