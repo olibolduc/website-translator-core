@@ -152,13 +152,18 @@ export class Builder {
         const $ = cheerio.load(html);
         const nodesToTranslate = [];
 
-        // Extract text nodes
-        $('body').find('*').contents().each((i, el) => {
-            if (el.type === 'text') {
-                const text = $(el).text().trim();
-                if (text.length > 1) { // Ignore single chars/empty
-                    nodesToTranslate.push({ node: el, text, type: 'text' });
-                }
+        // Extract text from elements (not individual text nodes)
+        // We'll translate the direct text content of elements
+        $('body').find('*').each((i, el) => {
+            const $el = $(el);
+
+            // Get direct text content (not including children)
+            const directText = $el.contents().filter(function () {
+                return this.type === 'text';
+            }).text().trim();
+
+            if (directText && directText.length > 1) {
+                nodesToTranslate.push({ node: el, text: directText, type: 'element' });
             }
         });
 
@@ -186,17 +191,22 @@ export class Builder {
         nodesToTranslate.forEach((item, index) => {
             const translation = translations[index];
             if (translation) {
-                if (item.type === 'text') {
-                    // For text nodes, update the parent element's text
-                    // This preserves the DOM structure better than replaceWith
-                    const $parent = $(item.node).parent();
-                    if ($parent.length) {
-                        // Get all text content of the parent
-                        const currentText = $(item.node).text();
-                        const parentHtml = $parent.html();
-                        // Replace the old text with new translation in the parent's HTML
-                        const newHtml = parentHtml.replace(currentText, translation);
-                        $parent.html(newHtml);
+                if (item.type === 'element') {
+                    // For elements, replace only the direct text content
+                    const $el = $(item.node);
+                    const children = $el.children();
+
+                    if (children.length === 0) {
+                        // No children, just replace all text
+                        $el.text(translation);
+                    } else {
+                        // Has children, need to replace text nodes carefully
+                        $el.contents().each(function () {
+                            if (this.type === 'text' && $(this).text().trim()) {
+                                this.data = translation;
+                                return false; // Stop after first text node
+                            }
+                        });
                     }
                 } else if (item.type === 'attr') {
                     $(item.node).attr(item.attrName, translation);
