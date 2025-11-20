@@ -86,25 +86,30 @@ export class Builder {
 
         // We copy from sourceDir again to avoid "copying target into itself" issues
         // if targetDir is inside sourceDir.
-        await fs.copy(sourceDir, langDir, {
-            filter: (src) => {
-                const basename = path.basename(src);
+        const assetItems = await fs.readdir(sourceDir);
+        for (const item of assetItems) {
+            // Skip system/output folders
+            if (['.git', 'node_modules', '.env', 'dist', 'dist-full', 'engine'].includes(item)) continue;
 
-                // Exclude system files
-                if (['.git', 'node_modules', '.env'].includes(basename)) return false;
+            const srcPath = path.join(sourceDir, item);
+            const destPath = path.join(langDir, item);
 
-                // Exclude the output directory itself if it's inside source
-                // We need to resolve paths to be sure
-                const absSrc = path.resolve(src);
-                const absTarget = path.resolve(targetDir);
-                if (absSrc === absTarget) return false;
+            // Safety check: don't copy if srcPath is the targetDir
+            if (path.resolve(srcPath) === path.resolve(targetDir)) continue;
 
-                // Don't copy HTML files (we already generated them)
-                if (src.endsWith('.html')) return false;
+            // Don't copy HTML files (we already generated them)
+            if (item.endsWith('.html')) continue;
 
-                return true;
-            }
-        });
+            // If it's a directory, we need to copy it (unless it's the target dir, checked above)
+            // If it's a file, copy it.
+            await fs.copy(srcPath, destPath, {
+                filter: (src) => {
+                    // Double check inside directories (recursive filter)
+                    if (src.endsWith('.html')) return false;
+                    return true;
+                }
+            });
+        }
 
         // 7. Generate Sitemap
         await generateGlobalSitemap(targetDir, baseUrl);
