@@ -109,14 +109,34 @@ export class Builder {
             // But to minimize changes, let's just use a new variable for the copy destination.
             const finalDestPath = path.join(langDir, safeItem);
 
-            console.log(`   - Copying ${item} to ${finalDestPath}`);
-            await fs.copy(srcPath, finalDestPath, {
-                filter: (src) => {
-                    // Double check inside directories (recursive filter)
-                    if (src.endsWith('.html')) return false;
-                    return true;
+            // Special handling for 'images' folder to rename files inside it
+            if (item === 'images') {
+                console.log(`   - Processing images folder...`);
+                await fs.ensureDir(finalDestPath);
+                const imageFiles = await fs.readdir(srcPath);
+
+                for (const img of imageFiles) {
+                    const safeImgName = img.replace(/\s+/g, '-');
+                    const srcImgPath = path.join(srcPath, img);
+                    const destImgPath = path.join(finalDestPath, safeImgName);
+
+                    // Only copy files, ignore subdirectories in images for now (Webflow usually flat)
+                    const stat = await fs.stat(srcImgPath);
+                    if (stat.isFile()) {
+                        await fs.copy(srcImgPath, destImgPath);
+                    }
                 }
-            });
+            } else {
+                // For other folders (css, js, fonts), just copy as is (or with top-level rename)
+                console.log(`   - Copying ${item} to ${finalDestPath}`);
+                await fs.copy(srcPath, finalDestPath, {
+                    filter: (src) => {
+                        // Double check inside directories (recursive filter)
+                        if (src.endsWith('.html')) return false;
+                        return true;
+                    }
+                });
+            }
         }
 
 
