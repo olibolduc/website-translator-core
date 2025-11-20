@@ -100,18 +100,9 @@ export class Builder {
             // Don't copy HTML files (we already generated them)
             if (item.endsWith('.html')) continue;
 
-            // If it's a directory, we need to copy it (unless it's the target dir, checked above)
-            // If it's a file, copy it.
-            // Normalize filename: replace spaces with dashes to match Webflow's HTML export
-            const safeItem = item.replace(/\s+/g, '-');
-            // We reuse the destPath variable but we need to re-assign it or use a new one.
-            // Since destPath was const at the top, we should have used let or just use a new variable name here.
-            // But to minimize changes, let's just use a new variable for the copy destination.
-            const finalDestPath = path.join(langDir, safeItem);
-
-            // Standard copy for all assets
-            console.log(`   - Copying ${item} to ${finalDestPath}`);
-            await fs.copy(srcPath, finalDestPath, {
+            // Copy assets as-is
+            console.log(`   - Copying ${item} to ${destPath}`);
+            await fs.copy(srcPath, destPath, {
                 filter: (src) => {
                     // Double check inside directories (recursive filter)
                     if (src.endsWith('.html')) return false;
