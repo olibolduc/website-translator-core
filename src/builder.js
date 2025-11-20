@@ -112,93 +112,94 @@ export class Builder {
             });
         }
 
-    }
 
-    // DEBUG: List contents of images folder
-    const debugImagesPath = path.join(langDir, 'images');
-    if(await fs.pathExists(debugImagesPath)) {
-    console.log(`📂 DEBUG: Listing files in ${debugImagesPath}:`);
-    const debugFiles = await fs.readdir(debugImagesPath);
-    debugFiles.forEach(f => console.log(`   - ${f}`));
-} else {
-    console.log(`❌ DEBUG: Images folder NOT FOUND at ${debugImagesPath}`);
-}
 
-// 7. Generate Sitemap
-await generateGlobalSitemap(targetDir, baseUrl);
 
-console.log(`✨ Build complete! Output: ${targetDir}`);
+        // DEBUG: List contents of images folder
+        const debugImagesPath = path.join(langDir, 'images');
+        if (await fs.pathExists(debugImagesPath)) {
+            console.log(`📂 DEBUG: Listing files in ${debugImagesPath}:`);
+            const debugFiles = await fs.readdir(debugImagesPath);
+            debugFiles.forEach(f => console.log(`   - ${f}`));
+        } else {
+            console.log(`❌ DEBUG: Images folder NOT FOUND at ${debugImagesPath}`);
+        }
+
+        // 7. Generate Sitemap
+        await generateGlobalSitemap(targetDir, baseUrl);
+
+        console.log(`✨ Build complete! Output: ${targetDir}`);
     }
 
     async findHtmlFiles(dir) {
-    let results = [];
-    const list = await fs.readdir(dir);
-    for (const file of list) {
-        const filePath = path.join(dir, file);
-        const stat = await fs.stat(filePath);
-        if (stat && stat.isDirectory()) {
-            if (file === 'node_modules' || file === '.git' || file.startsWith('.')) continue;
-            results = results.concat(await this.findHtmlFiles(filePath));
-        } else {
-            if (file.endsWith('.html')) {
-                results.push(filePath);
+        let results = [];
+        const list = await fs.readdir(dir);
+        for (const file of list) {
+            const filePath = path.join(dir, file);
+            const stat = await fs.stat(filePath);
+            if (stat && stat.isDirectory()) {
+                if (file === 'node_modules' || file === '.git' || file.startsWith('.')) continue;
+                results = results.concat(await this.findHtmlFiles(filePath));
+            } else {
+                if (file.endsWith('.html')) {
+                    results.push(filePath);
+                }
             }
         }
+        return results;
     }
-    return results;
-}
 
     async translateHtml(html, sourceLang, targetLang) {
-    const $ = cheerio.load(html);
-    const nodesToTranslate = [];
+        const $ = cheerio.load(html);
+        const nodesToTranslate = [];
 
-    // Extract text nodes
-    $('body').find('*').contents().each((i, el) => {
-        if (el.type === 'text') {
-            const text = $(el).text().trim();
-            if (text.length > 1) { // Ignore single chars/empty
-                nodesToTranslate.push({ node: el, text, type: 'text' });
-            }
-        }
-    });
-
-    // Extract attributes (alt, title, placeholder, meta description)
-    $('*').each((i, el) => {
-        ['alt', 'title', 'placeholder', 'aria-label'].forEach(attr => {
-            const val = $(el).attr(attr);
-            if (val && val.trim().length > 1) {
-                nodesToTranslate.push({ node: el, text: val, type: 'attr', attrName: attr });
+        // Extract text nodes
+        $('body').find('*').contents().each((i, el) => {
+            if (el.type === 'text') {
+                const text = $(el).text().trim();
+                if (text.length > 1) { // Ignore single chars/empty
+                    nodesToTranslate.push({ node: el, text, type: 'text' });
+                }
             }
         });
-    });
 
-    // Meta description
-    const metaDesc = $('meta[name="description"]').attr('content');
-    if (metaDesc) {
-        nodesToTranslate.push({ node: $('meta[name="description"]'), text: metaDesc, type: 'meta' });
-    }
+        // Extract attributes (alt, title, placeholder, meta description)
+        $('*').each((i, el) => {
+            ['alt', 'title', 'placeholder', 'aria-label'].forEach(attr => {
+                const val = $(el).attr(attr);
+                if (val && val.trim().length > 1) {
+                    nodesToTranslate.push({ node: el, text: val, type: 'attr', attrName: attr });
+                }
+            });
+        });
 
-    // Translate Batch
-    const texts = nodesToTranslate.map(n => n.text);
-    const translations = await this.translator.translateBatch(texts, sourceLang, targetLang);
-
-    // Apply Translations
-    nodesToTranslate.forEach((item, index) => {
-        const translation = translations[index];
-        if (translation) {
-            if (item.type === 'text') {
-                $(item.node).replaceWith(translation);
-            } else if (item.type === 'attr') {
-                $(item.node).attr(item.attrName, translation);
-            } else if (item.type === 'meta') {
-                item.node.attr('content', translation);
-            }
+        // Meta description
+        const metaDesc = $('meta[name="description"]').attr('content');
+        if (metaDesc) {
+            nodesToTranslate.push({ node: $('meta[name="description"]'), text: metaDesc, type: 'meta' });
         }
-    });
 
-    // Update Lang Attribute
-    $('html').attr('lang', targetLang);
+        // Translate Batch
+        const texts = nodesToTranslate.map(n => n.text);
+        const translations = await this.translator.translateBatch(texts, sourceLang, targetLang);
 
-    return $.html();
-}
+        // Apply Translations
+        nodesToTranslate.forEach((item, index) => {
+            const translation = translations[index];
+            if (translation) {
+                if (item.type === 'text') {
+                    $(item.node).replaceWith(translation);
+                } else if (item.type === 'attr') {
+                    $(item.node).attr(item.attrName, translation);
+                } else if (item.type === 'meta') {
+                    item.node.attr('content', translation);
+                }
+            }
+        });
+
+        // Update Lang Attribute
+        $('html').attr('lang', targetLang);
+
+        return $.html();
+    }
 }
