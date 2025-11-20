@@ -102,6 +102,10 @@ export class Builder {
 
             // If it's a directory, we need to copy it (unless it's the target dir, checked above)
             // If it's a file, copy it.
+            // Normalize filename: replace spaces with dashes to match Webflow's HTML export
+            const safeItem = item.replace(/\s+/g, '-');
+            const destPath = path.join(langDir, safeItem);
+
             console.log(`   - Copying ${item} to ${destPath}`);
             await fs.copy(srcPath, destPath, {
                 filter: (src) => {
