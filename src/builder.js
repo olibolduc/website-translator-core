@@ -17,12 +17,22 @@ export class Builder {
         // 2. Copy source to target (Base version)
         // We copy everything first, then we'll process the translated version in a subdirectory
         console.log("📂 Copying assets...");
-        await fs.copy(sourceDir, targetDir, {
-            filter: (src) => {
-                const basename = path.basename(src);
-                return !['.git', 'node_modules', '.env', 'dist', 'dist-full'].includes(basename);
-            }
-        });
+        // 2. Copy source to target (Base version)
+        console.log("📂 Copying assets...");
+        const items = await fs.readdir(sourceDir);
+
+        for (const item of items) {
+            // Skip system/output folders
+            if (['.git', 'node_modules', '.env', 'dist', 'dist-full', 'engine'].includes(item)) continue;
+
+            const srcPath = path.join(sourceDir, item);
+            const destPath = path.join(targetDir, item);
+
+            // Safety check: don't copy if srcPath is the targetDir
+            if (path.resolve(srcPath) === path.resolve(targetDir)) continue;
+
+            await fs.copy(srcPath, destPath);
+        }
 
         // 3. Create language subdirectory (e.g., /en)
         const langDir = path.join(targetDir, targetLang);
