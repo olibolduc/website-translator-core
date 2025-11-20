@@ -102,6 +102,7 @@ export class Builder {
 
             // If it's a directory, we need to copy it (unless it's the target dir, checked above)
             // If it's a file, copy it.
+            console.log(`   - Copying ${item} to ${destPath}`);
             await fs.copy(srcPath, destPath, {
                 filter: (src) => {
                     // Double check inside directories (recursive filter)
