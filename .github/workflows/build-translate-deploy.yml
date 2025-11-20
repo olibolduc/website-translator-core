@@ -1,0 +1,97 @@
+name: Reusable Build and Deploy
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: false
+        type: string
+        default: '20'
+      source-lang:
+        required: true
+        type: string
+      target-lang:
+        required: true
+        type: string
+      site-url:
+        required: true
+        type: string
+    secrets:
+      GEMINI_API_KEY:
+        required: true
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Site Code
+        uses: actions/checkout@v4
+
+      - name: Checkout Translator Engine
+        uses: actions/checkout@v4
+        with:
+          repository: olibolduc/website-translator-core
+          path: engine
+          token: ${{ secrets.GITHUB_TOKEN }} # Needs access if repo is private
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install Engine Dependencies
+        run: |
+          cd engine
+          npm install
+
+      - name: Translate and Build
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Run the translator from the engine directory against the site root
+          # Source = .. (Site Root)
+          # Target = ../dist (Output)
+          cd engine
+          node src/index.js translate .. ../dist \
+            --source-lang ${{ inputs.source-lang }} \
+            --lang ${{ inputs.target-lang }} \
+            --url ${{ inputs.site-url }}
+
+      - name: Commit Translations Cache
+        run: |
+          cd engine
+          # If translations.json changed, we want to save it back to the SITE repo
+          # But wait, translations.json is in the engine folder now?
+          # Ideally, translations.json should be in the SITE repo to persist between runs.
+          
+          # Let's move it back to site root if it exists
+          if [ -f translations.json ]; then
+            mv translations.json ../translations.json
+          fi
+          
+          cd ..
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          if [ -f translations.json ]; then
+            git add -f translations.json
+            git diff --quiet && git diff --staged --quiet || git commit -m "Update translations cache [skip ci]"
+            git push
+          fi
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: './dist'
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Deploy from GitHub Actions"
+          enable-pull-request-comment: false
+          enable-commit-comment: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
