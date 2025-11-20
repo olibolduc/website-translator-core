@@ -3,7 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 
 export class Translator {
-    constructor() {
+    constructor(cachePath) {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             throw new Error("GEMINI_API_KEY is not defined in environment variables");
@@ -11,18 +11,24 @@ export class Translator {
         this.genAI = new GoogleGenerativeAI(apiKey);
         this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         this.cache = {};
-        this.cacheFile = 'translations.json';
+        this.cacheFile = cachePath || 'translations.json';
         this.loadCache();
     }
 
     loadCache() {
+        console.log(`🔍 Looking for cache at: ${this.cacheFile}`);
         if (fs.existsSync(this.cacheFile)) {
             try {
                 this.cache = fs.readJsonSync(this.cacheFile);
+                const langKeys = Object.keys(this.cache);
+                const totalEntries = langKeys.reduce((sum, lang) => sum + Object.keys(this.cache[lang] || {}).length, 0);
+                console.log(`📦 Cache loaded: ${totalEntries} entries across ${langKeys.length} language(s)`);
             } catch (e) {
                 console.warn("Could not read cache file, starting fresh.");
                 this.cache = {};
             }
+        } else {
+            console.log(`📝 No existing cache found, starting fresh.`);
         }
     }
 
@@ -49,6 +55,11 @@ export class Translator {
 
         // Filter out texts that are already cached
         const missingTexts = texts.filter(t => !this.get(t, targetLang));
+        const cachedCount = texts.length - missingTexts.length;
+
+        if (cachedCount > 0) {
+            console.log(`✅ Using ${cachedCount} cached translations`);
+        }
 
         if (missingTexts.length > 0) {
             console.log(`🤖 Translating ${missingTexts.length} new segments with Gemini...`);
@@ -71,16 +82,16 @@ export class Translator {
         const prompt = `
       You are a professional website translator.
       Translate the following array of texts from ${sourceLang} into ${targetLang}.
-      
-      Rules:
-      1. Maintain the tone and style of the original text.
+
+Rules:
+1. Maintain the tone and style of the original text.
       2. Preserve all HTML entities, variables, or special characters exactly as they are.
       3. Do not translate proper names or technical terms that should remain in the original language.
       4. Return ONLY a JSON array of strings.
       
       Input texts:
       ${JSON.stringify(texts)}
-    `;
+`;
 
         try {
             const result = await this.model.generateContent(prompt);
