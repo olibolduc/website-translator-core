@@ -187,7 +187,17 @@ export class Builder {
             const translation = translations[index];
             if (translation) {
                 if (item.type === 'text') {
-                    $(item.node).replaceWith(translation);
+                    // For text nodes, update the parent element's text
+                    // This preserves the DOM structure better than replaceWith
+                    const $parent = $(item.node).parent();
+                    if ($parent.length) {
+                        // Get all text content of the parent
+                        const currentText = $(item.node).text();
+                        const parentHtml = $parent.html();
+                        // Replace the old text with new translation in the parent's HTML
+                        const newHtml = parentHtml.replace(currentText, translation);
+                        $parent.html(newHtml);
+                    }
                 } else if (item.type === 'attr') {
                     $(item.node).attr(item.attrName, translation);
                 } else if (item.type === 'meta') {
