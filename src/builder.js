@@ -189,6 +189,12 @@ export class Builder {
           if (alternate) {
             link.href = alternate.href;
           }
+          
+          // Mark active language
+          const currentLang = document.documentElement.lang;
+          if (locale === currentLang || (currentLang.startsWith(locale + '-'))) {
+            link.classList.add('current-lang');
+          }
         });
       });
     </script>

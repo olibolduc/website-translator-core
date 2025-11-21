@@ -31,6 +31,9 @@ jobs:
       NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
 ```
 
+### Monolingual Mode
+If you want to deploy a site without translation (e.g., a French-only site), simply set `source-lang` and `target-lang` to the same value (e.g., both 'fr'). The system will skip translation and deploy the original site.
+
 ### Advanced Locale Configuration
 You can decouple the URL structure from the SEO language tag.
 
@@ -78,7 +81,9 @@ In your Webflow/HTML, simply add your language links and give them a `data-lang`
 <a href="#" data-lang="en-US">English</a>
 ```
 
-**That's it!** The injected script will automatically find the correct URL (from the `hreflang` tags) and update the `href` of these links.
+**That's it!** The injected script will automatically:
+1. Find the correct URL (from the `hreflang` tags) and update the `href` of these links.
+2. Add a `current-lang` class to the link matching the current page's language. You can use this class in Webflow to style the active language (e.g., make it bold or hide it).
 
 ## Local Development
 
