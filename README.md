@@ -31,6 +31,9 @@ jobs:
       NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
 ```
 
+### Monolingual Mode
+If you want to deploy a site without translation (e.g., a French-only site), simply set `source-lang` and `target-lang` to the same value (e.g., both 'fr'). The system will skip translation and deploy the original site.
+
 ## Local Development
 
 1.  Clone this repo.
