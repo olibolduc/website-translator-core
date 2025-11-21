@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import * as cheerio from 'cheerio';
 
-export async function injectSeoTags({ filePath, baseUrl, sourceLang, targetLang, relativePath, isOriginal }) {
+export async function injectSeoTags({ filePath, baseUrl, sourceLang, targetLang, sourceLocale, targetLocale, relativePath, isOriginal }) {
     const html = await fs.readFile(filePath, 'utf-8');
     const $ = cheerio.load(html);
 
@@ -28,9 +28,10 @@ export async function injectSeoTags({ filePath, baseUrl, sourceLang, targetLang,
 
     // 2. Hreflang
     // We always point to both versions
+    // Use LOCALES for the hreflang attribute (e.g. fr-CA, en-US)
     $('link[rel="alternate"][hreflang]').remove();
-    $('head').append(`<link rel="alternate" hreflang="${sourceLang}" href="${originalUrl}">`);
-    $('head').append(`<link rel="alternate" hreflang="${targetLang}" href="${translatedUrl}">`);
+    $('head').append(`<link rel="alternate" hreflang="${sourceLocale}" href="${originalUrl}">`);
+    $('head').append(`<link rel="alternate" hreflang="${targetLocale}" href="${translatedUrl}">`);
 
     await fs.writeFile(filePath, $.html());
 }

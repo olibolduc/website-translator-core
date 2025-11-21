@@ -8,16 +8,15 @@ export class Builder {
         this.translator = translator;
     }
 
-    async build({ sourceDir, targetDir, sourceLang, targetLang, baseUrl }) {
+    async build({ sourceDir, targetDir, sourceLang, targetLang, sourceLocale, targetLocale, baseUrl }) {
         console.log(`🏗️  Building site: ${sourceLang} -> ${targetLang}`);
+        console.log(`🌍 Locales: Source=${sourceLocale}, Target=${targetLocale}`);
 
         // 1. Clean target directory
         await fs.emptyDir(targetDir);
 
         // 2. Copy source to target (Base version)
         // We copy everything first, then we'll process the translated version in a subdirectory
-        console.log("📂 Copying assets...");
-        // 2. Copy source to target (Base version)
         console.log("📂 Copying assets...");
         const items = await fs.readdir(sourceDir);
 
@@ -28,84 +27,35 @@ export class Builder {
             const srcPath = path.join(sourceDir, item);
             const destPath = path.join(targetDir, item);
 
-            // Copy source to target (this creates the "original" version in dist)
-            await fs.copy(sourceDir, targetDir);
-            console.log(`📂 Copied source files to ${targetDir}`);
+            // Safety check: don't copy if srcPath is the targetDir
+            if (path.resolve(srcPath) === path.resolve(targetDir)) continue;
 
-            const isMonolingual = sourceLang === targetLang;
+            await fs.copy(srcPath, destPath);
+        }
+        console.log(`📂 Copied source files to ${targetDir}`);
+
+        const isMonolingual = sourceLang === targetLang;
+        if (isMonolingual) {
+            console.log('ℹ️  Monolingual mode detected (source === target). Skipping translation but ensuring SEO compliance.');
+        } else {
+            // 3. Create language subdirectory (e.g., /en)
+            const langDir = path.join(targetDir, targetLang);
+            await fs.ensureDir(langDir);
+        }
+
+        // 4. Find all HTML files
+        const htmlFiles = await this.findHtmlFiles(targetDir); // Search in targetDir (base version)
+
+        // 5. Process each file
+        for (const file of htmlFiles) {
+            const relativePath = path.relative(targetDir, file);
+
+            // Skip if we are already inside the langDir (shouldn't happen yet but good safety)
+            if (!isMonolingual && relativePath.startsWith(targetLang)) continue;
+
+            console.log(`📄 Processing ${relativePath}...`);
+
             if (isMonolingual) {
-                console.log('ℹ️  Monolingual mode detected (source === target). Skipping translation but ensuring SEO compliance.');
-            } else {
-                // 3. Create language subdirectory (e.g., /en)
-                const langDir = path.join(targetDir, targetLang);
-                await fs.ensureDir(langDir);
-            }
-
-            // 4. Find all HTML files
-            const htmlFiles = await this.findHtmlFiles(targetDir); // Search in targetDir (base version)
-
-            // 5. Process each file
-            for (const file of htmlFiles) {
-                const relativePath = path.relative(targetDir, file);
-
-                // Skip if we are already inside the langDir (shouldn't happen yet but good safety)
-                if (!isMonolingual && relativePath.startsWith(targetLang)) continue;
-
-                console.log(`📄 Processing ${relativePath}...`);
-
-                if (isMonolingual) {
-                    // Monolingual: Just update lang attribute and canonical
-                    const content = await fs.readFile(file, 'utf-8');
-                    const $ = cheerio.load(content);
-
-                    // Update Lang Attribute
-                    $('html').attr('lang', targetLang);
-
-                    // Inject Canonical (Self-referencing)
-                    // Remove existing canonical first to avoid duplicates
-                    $('link[rel="canonical"]').remove();
-                    $('head').append(`<link rel="canonical" href="${baseUrl}/${relativePath === 'index.html' ? '' : relativePath}">`);
-
-                    await fs.writeFile(file, $.html());
-                } else {
-                    // Multilingual: Translate and create new version
-
-                    // A. Prepare Translated Version
-                    const content = await fs.readFile(file, 'utf-8');
-                    const translatedContent = await this.translateHtml(content, sourceLang, targetLang);
-
-                    // Save translated file to langDir
-                    const langDir = path.join(targetDir, targetLang);
-                    const targetPath = path.join(langDir, relativePath);
-                    await fs.ensureDir(path.dirname(targetPath));
-                    await fs.writeFile(targetPath, translatedContent);
-
-                    // B. Inject SEO Tags (Hreflang/Canonical) into BOTH versions
-                    // We need to update the original file in targetDir AND the new file in langDir
-                    await injectSeoTags({
-                        filePath: file, // Original (FR)
-                        baseUrl,
-                        sourceLang,
-                        targetLang,
-                        relativePath,
-                        isOriginal: true
-                    });
-
-                    await injectSeoTags({
-                        filePath: targetPath, // Translated (EN)
-                        baseUrl,
-                        sourceLang,
-                        targetLang,
-                        relativePath,
-                        isOriginal: false
-                    });
-                }
-            }
-
-            // 6. Copy Assets to Lang Dir (Only for Multilingual)
-            if (!isMonolingual) {
-                console.log("📦 Duplicating assets for translated version...");
-                const langDir = path.join(targetDir, targetLang);
 
                 // We copy from sourceDir again to avoid "copying target into itself" issues
                 const assetItems = await fs.readdir(sourceDir);
@@ -158,7 +108,7 @@ export class Builder {
             return results;
         }
 
-    async translateHtml(html, sourceLang, targetLang) {
+    async translateHtml(html, sourceLang, targetLang, targetLocale) {
             const $ = cheerio.load(html);
             const nodesToTranslate = [];
 
@@ -233,7 +183,7 @@ export class Builder {
             });
 
             // Update Lang Attribute
-            $('html').attr('lang', targetLang);
+            $('html').attr('lang', targetLocale);
 
             return $.html();
         }

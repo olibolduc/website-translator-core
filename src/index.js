@@ -42,6 +42,16 @@ yargs(hideBin(process.argv))
                     type: 'string',
                     description: 'Base URL of the website (e.g., https://example.com)',
                     demandOption: true,
+                })
+                .option('source-locale', {
+                    alias: 'sl',
+                    type: 'string',
+                    description: 'Source locale for SEO (e.g., fr-CA). Defaults to source-lang.',
+                })
+                .option('target-locale', {
+                    alias: 'tl',
+                    type: 'string',
+                    description: 'Target locale for SEO (e.g., en-US). Defaults to lang.',
                 });
         },
         async (argv) => {
@@ -65,6 +75,8 @@ yargs(hideBin(process.argv))
                     targetDir,
                     sourceLang: argv.sourceLang,
                     targetLang: argv.lang,
+                    sourceLocale: argv.sourceLocale || argv.sourceLang,
+                    targetLocale: argv.targetLocale || argv.lang,
                     baseUrl: argv.url
                 });
 
