@@ -32,16 +32,14 @@ export class Builder {
             await fs.copy(sourceDir, targetDir);
             console.log(`📂 Copied source files to ${targetDir}`);
 
-            // Monolingual Mode: If source and target languages are the same, stop here.
-            if (sourceLang === targetLang) {
-                console.log('ℹ️  Monolingual mode detected (source === target). Skipping translation.');
-                console.log(`✨ Build complete! Output: ${targetDir}`);
-                return;
+            const isMonolingual = sourceLang === targetLang;
+            if (isMonolingual) {
+                console.log('ℹ️  Monolingual mode detected (source === target). Skipping translation but ensuring SEO compliance.');
+            } else {
+                // 3. Create language subdirectory (e.g., /en)
+                const langDir = path.join(targetDir, targetLang);
+                await fs.ensureDir(langDir);
             }
-
-            // 3. Create language subdirectory (e.g., /en)
-            const langDir = path.join(targetDir, targetLang);
-            await fs.ensureDir(langDir);
 
             // 4. Find all HTML files
             const htmlFiles = await this.findHtmlFiles(targetDir); // Search in targetDir (base version)
@@ -51,85 +49,92 @@ export class Builder {
                 const relativePath = path.relative(targetDir, file);
 
                 // Skip if we are already inside the langDir (shouldn't happen yet but good safety)
-                if (relativePath.startsWith(targetLang)) continue;
+                if (!isMonolingual && relativePath.startsWith(targetLang)) continue;
 
                 console.log(`📄 Processing ${relativePath}...`);
 
-                // A. Prepare Translated Version
-                const content = await fs.readFile(file, 'utf-8');
-                const translatedContent = await this.translateHtml(content, sourceLang, targetLang);
+                if (isMonolingual) {
+                    // Monolingual: Just update lang attribute and canonical
+                    const content = await fs.readFile(file, 'utf-8');
+                    const $ = cheerio.load(content);
 
-                // Save translated file to langDir
-                // TODO: Implement URL rewriting/slug translation here if needed
-                const targetPath = path.join(langDir, relativePath);
-                await fs.ensureDir(path.dirname(targetPath));
-                await fs.writeFile(targetPath, translatedContent);
+                    // Update Lang Attribute
+                    $('html').attr('lang', targetLang);
 
-                // B. Inject SEO Tags (Hreflang/Canonical) into BOTH versions
-                // We need to update the original file in targetDir AND the new file in langDir
-                await injectSeoTags({
-                    filePath: file, // Original (FR)
-                    baseUrl,
-                    sourceLang,
-                    targetLang,
-                    relativePath,
-                    isOriginal: true
-                });
+                    // Inject Canonical (Self-referencing)
+                    // Remove existing canonical first to avoid duplicates
+                    $('link[rel="canonical"]').remove();
+                    $('head').append(`<link rel="canonical" href="${baseUrl}/${relativePath === 'index.html' ? '' : relativePath}">`);
 
-                await injectSeoTags({
-                    filePath: targetPath, // Translated (EN)
-                    baseUrl,
-                    sourceLang,
-                    targetLang,
-                    relativePath,
-                    isOriginal: false
-                });
+                    await fs.writeFile(file, $.html());
+                } else {
+                    // Multilingual: Translate and create new version
+
+                    // A. Prepare Translated Version
+                    const content = await fs.readFile(file, 'utf-8');
+                    const translatedContent = await this.translateHtml(content, sourceLang, targetLang);
+
+                    // Save translated file to langDir
+                    const langDir = path.join(targetDir, targetLang);
+                    const targetPath = path.join(langDir, relativePath);
+                    await fs.ensureDir(path.dirname(targetPath));
+                    await fs.writeFile(targetPath, translatedContent);
+
+                    // B. Inject SEO Tags (Hreflang/Canonical) into BOTH versions
+                    // We need to update the original file in targetDir AND the new file in langDir
+                    await injectSeoTags({
+                        filePath: file, // Original (FR)
+                        baseUrl,
+                        sourceLang,
+                        targetLang,
+                        relativePath,
+                        isOriginal: true
+                    });
+
+                    await injectSeoTags({
+                        filePath: targetPath, // Translated (EN)
+                        baseUrl,
+                        sourceLang,
+                        targetLang,
+                        relativePath,
+                        isOriginal: false
+                    });
+                }
             }
 
-            // 6. Copy Assets to Lang Dir (Simple approach: Duplicate assets)
-            console.log("📦 Duplicating assets for translated version...");
+            // 6. Copy Assets to Lang Dir (Only for Multilingual)
+            if (!isMonolingual) {
+                console.log("📦 Duplicating assets for translated version...");
+                const langDir = path.join(targetDir, targetLang);
 
-            // We copy from sourceDir again to avoid "copying target into itself" issues
-            // if targetDir is inside sourceDir.
-            const assetItems = await fs.readdir(sourceDir);
-            for (const item of assetItems) {
-                // Skip system/output folders
-                if (['.git', 'node_modules', '.env', 'dist', 'dist-full', 'engine'].includes(item)) continue;
+                // We copy from sourceDir again to avoid "copying target into itself" issues
+                const assetItems = await fs.readdir(sourceDir);
+                for (const item of assetItems) {
+                    // Skip system/output folders
+                    if (['.git', 'node_modules', '.env', 'dist', 'dist-full', 'engine'].includes(item)) continue;
 
-                const srcPath = path.join(sourceDir, item);
-                const destPath = path.join(langDir, item);
+                    const srcPath = path.join(sourceDir, item);
+                    const destPath = path.join(langDir, item);
 
-                // Safety check: don't copy if srcPath is the targetDir
-                if (path.resolve(srcPath) === path.resolve(targetDir)) continue;
+                    // Safety check: don't copy if srcPath is the targetDir
+                    if (path.resolve(srcPath) === path.resolve(targetDir)) continue;
 
-                // Don't copy HTML files (we already generated them)
-                if (item.endsWith('.html')) continue;
+                    // Don't copy HTML files (we already generated them)
+                    if (item.endsWith('.html')) continue;
 
-                // Copy assets as-is
-                console.log(`   - Copying ${item} to ${destPath}`);
-                await fs.copy(srcPath, destPath, {
-                    filter: (src) => {
-                        // Double check inside directories (recursive filter)
-                        if (src.endsWith('.html')) return false;
-                        return true;
-                    }
-                });
+                    // Copy assets as-is
+                    console.log(`   - Copying ${item} to ${destPath}`);
+                    await fs.copy(srcPath, destPath, {
+                        filter: (src) => {
+                            // Double check inside directories (recursive filter)
+                            if (src.endsWith('.html')) return false;
+                            return true;
+                        }
+                    });
+                }
             }
 
-
-
-
-            // DEBUG: List contents of images folder
-            const debugImagesPath = path.join(langDir, 'images');
-            if (await fs.pathExists(debugImagesPath)) {
-                console.log(`📂 DEBUG: Listing files in ${debugImagesPath}:`);
-                const debugFiles = await fs.readdir(debugImagesPath);
-                debugFiles.forEach(f => console.log(`   - ${f}`));
-            } else {
-                console.log(`❌ DEBUG: Images folder NOT FOUND at ${debugImagesPath}`);
-            }
-
-            // 7. Generate Sitemap
+            // 7. Generate Sitemap (Always generate sitemap)
             await generateGlobalSitemap(targetDir, baseUrl);
 
             console.log(`✨ Build complete! Output: ${targetDir}`);
