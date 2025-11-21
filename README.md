@@ -54,6 +54,54 @@ node src/index.js translate ... --source-lang en --lang fr --target-locale fr-CA
 ```
 *Result:* Root is `en` (SEO), `/fr` is `fr-CA` (SEO).
 
+### Multi-Language Support (New!)
+You can translate to multiple languages at once by using comma-separated lists.
+
+**Example: English -> Spanish & Italian**
+```bash
+node src/index.js translate ... --source-lang en --lang es,it --target-locale es-ES,it-IT
+```
+*Result:*
+- Root (`/`): English
+- `/es`: Spanish (es-ES)
+- `/it`: Italian (it-IT)
+- All pages will have correct `hreflang` tags pointing to all other versions.
+
+### Smart Language Switcher
+To ensure your language switcher stays on the same page (e.g., switching from `/about` to `/fr/about`), use this JavaScript snippet.
+
+**1. Add links with `data-lang` attributes:**
+In your Webflow/HTML, add your language links and give them a `data-lang` attribute matching the **locale** you defined (or the language code if you didn't specify a locale).
+
+```html
+<a href="#" class="lang-switch" data-lang="fr-CA">Français</a>
+<a href="#" class="lang-switch" data-lang="en-US">English</a>
+```
+
+**2. Add this script to your site (Before `</body>`):**
+This script automatically updates the `href` of your buttons to point to the correct translated page.
+
+```javascript
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const switches = document.querySelectorAll('.lang-switch');
+    
+    switches.forEach(link => {
+      const targetLocale = link.getAttribute('data-lang');
+      // Find the corresponding SEO tag
+      const alternate = document.querySelector(`link[hreflang="${targetLocale}"]`);
+      
+      if (alternate) {
+        link.href = alternate.href;
+      } else {
+        console.warn(`No translation found for ${targetLocale}`);
+        link.style.display = 'none'; // Optional: Hide if no translation
+      }
+    });
+  });
+</script>
+```
+
 ## Local Development
 
 1.  Clone this repo.
