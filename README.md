@@ -83,18 +83,17 @@ The system **automatically injects** a script that makes your language switcher 
     *   Scroll to **Custom Attributes**.
     *   Add `data-lang` with the value of your **locale** (e.g., `fr-CA`, `en-US`).
 
+4.  **Style the Active State (Optional):**
+    *   The script automatically adds a `current-lang` class to the link for the *current* language.
+    *   In Webflow, you can style this class (e.g., make it bold, change color, or set `display: none` if you want to hide the active language).
+
 **Example HTML output:**
 ```html
-<a href="#" data-lang="fr-CA">Français</a>
+<a href="#" data-lang="fr-CA" class="current-lang">Français</a>
 <a href="#" data-lang="en-US">English</a>
 ```
 
-**That's it!** The injected script will automatically:
-1.  **Update the Link:** It finds the correct URL for the *current page* (using the generated SEO tags) and updates the `href`.
-2.  **Mark Active Language:** It adds a `current-lang` class to the link matching the current page's language.
-    *   **Webflow Tip:** You can style this class in Webflow!
-    *   Select your link, add the class `current-lang`, and style it (e.g., make it bold, change color, or set `display: none` to hide it).
-    *   *Note: Remove the class from the element after styling so it only appears when the script adds it.*
+**That's it!** The injected script will automatically find the correct URL (from the `hreflang` tags) and update the `href` of these links.
 
 ## Local Development
 
