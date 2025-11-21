@@ -36,4 +36,6 @@ jobs:
 1.  Clone this repo.
 2.  `npm install`
 3.  Create `.env` with `GEMINI_API_KEY`.
-4.  Run: `node src/index.js translate /path/to/site /path/to/output --lang en --url https://test.com`
+4.  Run: `node src/index.js translate /path/to/site /path/to/output --source-lang fr --lang en --url https://test.com`
+
+For detailed instructions, see [HOW_TO_RUN_LOCALLY.md](./HOW_TO_RUN_LOCALLY.md).
