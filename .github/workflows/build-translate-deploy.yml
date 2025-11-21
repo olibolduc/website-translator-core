@@ -10,9 +10,17 @@ on:
       source-lang:
         required: true
         type: string
+      source-locale:
+        required: false
+        type: string
+        default: ''
       target-lang:
         required: true
         type: string
+      target-locale:
+        required: false
+        type: string
+        default: ''
       site-url:
         required: true
         type: string
@@ -59,10 +67,22 @@ jobs:
           # Source = .. (Site Root)
           # Target = ../dist (Output)
           cd engine
-          node src/index.js translate .. ../dist \
-            --source-lang ${{ inputs.source-lang }} \
-            --lang ${{ inputs.target-lang }} \
-            --url ${{ inputs.site-url }}
+          
+          # Build command with conditional locale parameters
+          CMD="node src/index.js translate .. ../dist --source-lang ${{ inputs.source-lang }} --lang ${{ inputs.target-lang }} --url ${{ inputs.site-url }}"
+          
+          # Add source-locale if provided
+          if [ -n "${{ inputs.source-locale }}" ]; then
+            CMD="$CMD --source-locale ${{ inputs.source-locale }}"
+          fi
+          
+          # Add target-locale if provided
+          if [ -n "${{ inputs.target-locale }}" ]; then
+            CMD="$CMD --target-locale ${{ inputs.target-locale }}"
+          fi
+          
+          # Execute the command
+          eval $CMD
 
       - name: Commit Translations Cache
         run: |
