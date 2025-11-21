@@ -88,14 +88,14 @@ export class Translator {
 
 Rules:
 1. Maintain the tone and style of the original text.
-      2. Preserve all HTML entities, variables, or special characters exactly as they are.
-      3. Do not translate proper names or technical terms that should remain in the original language.
-      4. Return ONLY a JSON array of strings.
+2. Preserve all HTML entities, variables, or special characters exactly as they are.
+3. Translate all headings, buttons, navigation items, and UI elements (e.g., "Règlements" -> "Rules", "Accueil" -> "Home").
+4. Only keep specific brand names (like "Espace Urbain Studio") in the original language.
+5. Return ONLY a JSON array of strings.
       
       Input texts:
       ${JSON.stringify(texts)}
 `;
-
         try {
             const result = await this.model.generateContent(prompt);
             const response = await result.response;
