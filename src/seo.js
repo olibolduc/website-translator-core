@@ -2,36 +2,41 @@ import fs from 'fs-extra';
 import path from 'path';
 import * as cheerio from 'cheerio';
 
-export async function injectSeoTags({ filePath, baseUrl, sourceLang, targetLang, sourceLocale, targetLocale, relativePath, isOriginal }) {
+export async function injectSeoTags({ filePath, baseUrl, currentLang, currentLocale, relativePath, isOriginal, allLanguages }) {
     const html = await fs.readFile(filePath, 'utf-8');
     const $ = cheerio.load(html);
 
     // Construct URLs
-    // Assuming relativePath is like "contact.html" or "about/index.html"
-    // Original URL: https://site.com/contact.html
-    // Translated URL: https://site.com/en/contact.html
-
     const urlPath = relativePath.split(path.sep).join('/');
     const cleanPath = urlPath.replace(/index\.html$/, '').replace(/\/$/, ''); // Remove index.html
 
-    const originalUrl = `${baseUrl}/${cleanPath}`;
-    const translatedUrl = `${baseUrl}/${targetLang}/${cleanPath}`;
+    // Calculate current canonical URL
+    let canonicalUrl;
+    if (isOriginal) {
+        canonicalUrl = `${baseUrl}/${cleanPath}`;
+    } else {
+        canonicalUrl = `${baseUrl}/${currentLang}/${cleanPath}`;
+    }
 
     // 1. Canonical
-    // If isOriginal (FR), canonical is originalUrl.
-    // If !isOriginal (EN), canonical is translatedUrl.
-    const canonicalUrl = isOriginal ? originalUrl : translatedUrl;
-
-    // Remove existing canonical
     $('link[rel="canonical"]').remove();
     $('head').append(`<link rel="canonical" href="${canonicalUrl}">`);
 
     // 2. Hreflang
-    // We always point to both versions
-    // Use LOCALES for the hreflang attribute (e.g. fr-CA, en-US)
+    // Generate hreflang tags for ALL languages (Source + Targets)
     $('link[rel="alternate"][hreflang]').remove();
-    $('head').append(`<link rel="alternate" hreflang="${sourceLocale}" href="${originalUrl}">`);
-    $('head').append(`<link rel="alternate" hreflang="${targetLocale}" href="${translatedUrl}">`);
+
+    if (allLanguages) {
+        allLanguages.forEach(langConfig => {
+            let href;
+            if (langConfig.isOriginal) {
+                href = `${baseUrl}/${cleanPath}`;
+            } else {
+                href = `${baseUrl}/${langConfig.lang}/${cleanPath}`;
+            }
+            $('head').append(`<link rel="alternate" hreflang="${langConfig.locale}" href="${href}">`);
+        });
+    }
 
     await fs.writeFile(filePath, $.html());
 }
