@@ -31,8 +31,28 @@ jobs:
       NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
 ```
 
-### Monolingual Mode
-If you want to deploy a site without translation (e.g., a French-only site), simply set `source-lang` and `target-lang` to the same value (e.g., both 'fr'). The system will skip translation and deploy the original site.
+### Advanced Locale Configuration
+You can decouple the URL structure from the SEO language tag.
+
+**Flags:**
+- `--source-locale`: Sets the `<html lang>` and `hreflang` for the source site. Defaults to `--source-lang`.
+- `--target-locale`: Sets the `<html lang>` and `hreflang` for the translated site. Defaults to `--lang`.
+
+**Common Scenarios:**
+
+**1. French Canadian Source (Root) -> English Target (`/en`)**
+Use `fr-CA` for SEO but keep the root clean.
+```bash
+node src/index.js translate ... --source-lang fr --source-locale fr-CA --lang en
+```
+*Result:* Root is `fr-CA` (SEO), `/en` is `en` (SEO).
+
+**2. English Source (Root) -> French Canadian Target (`/fr`)**
+Use `fr-CA` for SEO but keep the URL as `/fr`.
+```bash
+node src/index.js translate ... --source-lang en --lang fr --target-locale fr-CA
+```
+*Result:* Root is `en` (SEO), `/fr` is `fr-CA` (SEO).
 
 ## Local Development
 
