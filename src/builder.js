@@ -152,18 +152,30 @@ export class Builder {
         const $ = cheerio.load(html);
         const nodesToTranslate = [];
 
-        // Extract text from elements (not individual text nodes)
-        // We'll translate the direct text content of elements
+        // Extract nodes to translate
         $('body').find('*').each((i, el) => {
             const $el = $(el);
+            const hasElementChildren = $el.children().length > 0;
 
-            // Get direct text content (not including children)
-            const directText = $el.contents().filter(function () {
-                return this.type === 'text';
-            }).text().trim();
-
-            if (directText && directText.length > 1) {
-                nodesToTranslate.push({ node: el, text: directText, type: 'element' });
+            if (!hasElementChildren) {
+                // Leaf element (e.g., h3, button, p without links)
+                // Safe to replace entire text content
+                const text = $el.text().trim();
+                if (text.length > 1) {
+                    nodesToTranslate.push({ node: el, text: text, type: 'element' });
+                }
+            } else {
+                // Mixed content (e.g., p with a link inside)
+                // Must translate individual text nodes to preserve structure
+                $el.contents().each((j, child) => {
+                    if (child.type === 'text') {
+                        const text = child.data;
+                        // Only translate if it has meaningful content
+                        if (text.trim().length > 1) {
+                            nodesToTranslate.push({ node: child, text: text, type: 'text-node' });
+                        }
+                    }
+                });
             }
         });
 
@@ -192,9 +204,12 @@ export class Builder {
             const translation = translations[index];
             if (translation) {
                 if (item.type === 'element') {
-                    // Simply use .text() to replace all text content
-                    // This works for elements with or without children
+                    // Safe to use .text() for leaf elements
                     $(item.node).text(translation);
+                } else if (item.type === 'text-node') {
+                    // For text nodes in mixed content, update data directly
+                    // This preserves siblings (like <a> tags)
+                    item.node.data = translation;
                 } else if (item.type === 'attr') {
                     $(item.node).attr(item.attrName, translation);
                 } else if (item.type === 'meta') {
