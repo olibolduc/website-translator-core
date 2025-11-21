@@ -91,7 +91,8 @@ Rules:
 2. Preserve all HTML entities, variables, or special characters exactly as they are.
 3. Translate all headings, buttons, navigation items, and UI elements (e.g., "Règlements" -> "Rules", "Accueil" -> "Home").
 4. Only keep specific brand names (like "Espace Urbain Studio") in the original language.
-5. Return ONLY a JSON array of strings.
+5. Format currency correctly for the target language (e.g., "50$" -> "$50" in English).
+6. Return ONLY a JSON array of strings.
       
       Input texts:
       ${JSON.stringify(texts)}
