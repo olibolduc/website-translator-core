@@ -71,19 +71,27 @@ node src/index.js translate ... --source-lang en --lang es,it --target-locale es
 - All pages will have correct `hreflang` tags pointing to all other versions.
 
 ### Smart Language Switcher
-The system **automatically injects** a script that makes your language switcher work perfectly. It ensures that when a user clicks "English", they go to the *English version of the current page*, not just the home page.
+The system **automatically injects** a script that makes your language switcher work perfectly. It ensures that when a user clicks "English", they go to the *English version of the current page* (e.g., `/about` -> `/en/about`), not just the home page.
 
-**How to use it:**
-In your Webflow/HTML, simply add your language links and give them a `data-lang` attribute matching the **locale** (or language code).
+**How to set it up in Webflow:**
 
+1.  **Create your links:** Add a Link Block or Text Link for each language (e.g., "FR", "EN").
+2.  **Set a dummy URL:** Set the link URL to `#` (or anything). The script will overwrite this.
+3.  **Add a Custom Attribute:**
+    *   Select the link.
+    *   Go to the **Settings** panel (Gear icon).
+    *   Scroll to **Custom Attributes**.
+    *   Add `data-lang` with the value of your **locale** (e.g., `fr-CA`, `en-US`).
+
+**Example HTML output:**
 ```html
 <a href="#" data-lang="fr-CA">Français</a>
 <a href="#" data-lang="en-US">English</a>
 ```
 
 **That's it!** The injected script will automatically:
-1. Find the correct URL (from the `hreflang` tags) and update the `href` of these links.
-2. Add a `current-lang` class to the link matching the current page's language. You can use this class in Webflow to style the active language (e.g., make it bold or hide it).
+1.  **Update the Link:** It finds the correct URL for the *current page* (using the generated SEO tags) and updates the `href`.
+2.  **Mark Active Language:** It adds a `current-lang` class to the link matching the current page's language. You can style this class in Webflow (e.g., make it bold or hide it).
 
 ## Local Development
 
