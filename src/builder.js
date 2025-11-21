@@ -314,6 +314,14 @@ export class Builder {
             });
         });
 
+        // Extract input/button values (e.g., <input type="submit" value="Send">)
+        $('input[value], button[value]').each((i, el) => {
+            const val = $(el).attr('value');
+            if (val && val.trim().length > 1) {
+                nodesToTranslate.push({ node: el, text: val, type: 'attr', attrName: 'value' });
+            }
+        });
+
         // Meta description
         const metaDesc = $('meta[name="description"]').attr('content');
         if (metaDesc) {
@@ -345,6 +353,20 @@ export class Builder {
 
         // Update Lang Attribute
         $('html').attr('lang', targetLocale);
+
+        // Fix form action URLs to maintain language context
+        // If a form posts to /thank-you, it should post to /en/thank-you on English pages
+        $('form[action]').each((i, el) => {
+            const action = $(el).attr('action');
+            // Only fix relative URLs (not external or anchor-only)
+            if (action && action.startsWith('/') && !action.startsWith('//')) {
+                // Don't modify if already has language prefix
+                if (!action.startsWith(`/${targetLang}/`)) {
+                    const newAction = `/${targetLang}${action}`;
+                    $(el).attr('action', newAction);
+                }
+            }
+        });
 
         return $.html();
     }
