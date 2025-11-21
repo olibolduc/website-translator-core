@@ -91,7 +91,10 @@ The system **automatically injects** a script that makes your language switcher 
 
 **That's it!** The injected script will automatically:
 1.  **Update the Link:** It finds the correct URL for the *current page* (using the generated SEO tags) and updates the `href`.
-2.  **Mark Active Language:** It adds a `current-lang` class to the link matching the current page's language. You can style this class in Webflow (e.g., make it bold or hide it).
+2.  **Mark Active Language:** It adds a `current-lang` class to the link matching the current page's language.
+    *   **Webflow Tip:** You can style this class in Webflow!
+    *   Select your link, add the class `current-lang`, and style it (e.g., make it bold, change color, or set `display: none` to hide it).
+    *   *Note: Remove the class from the element after styling so it only appears when the script adds it.*
 
 ## Local Development
 
