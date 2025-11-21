@@ -192,22 +192,9 @@ export class Builder {
             const translation = translations[index];
             if (translation) {
                 if (item.type === 'element') {
-                    // For elements, replace only the direct text content
-                    const $el = $(item.node);
-                    const children = $el.children();
-
-                    if (children.length === 0) {
-                        // No children, just replace all text
-                        $el.text(translation);
-                    } else {
-                        // Has children, need to replace text nodes carefully
-                        $el.contents().each(function () {
-                            if (this.type === 'text' && $(this).text().trim()) {
-                                this.data = translation;
-                                return false; // Stop after first text node
-                            }
-                        });
-                    }
+                    // Simply use .text() to replace all text content
+                    // This works for elements with or without children
+                    $(item.node).text(translation);
                 } else if (item.type === 'attr') {
                     $(item.node).attr(item.attrName, translation);
                 } else if (item.type === 'meta') {
