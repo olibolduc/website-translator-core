@@ -70,13 +70,20 @@ yargs(hideBin(process.argv))
                 const translator = new Translator(cachePath);
                 const builder = new Builder(translator);
 
+                const targetLangs = argv.lang.split(',').map(s => s.trim());
+                const targetLocales = (argv.targetLocale || argv.lang).split(',').map(s => s.trim());
+
+                if (targetLangs.length !== targetLocales.length) {
+                    throw new Error(`Mismatch! You provided ${targetLangs.length} languages but ${targetLocales.length} locales. Please provide a locale for EACH language, or omit --target-locale to use defaults.`);
+                }
+
                 await builder.build({
                     sourceDir,
                     targetDir,
                     sourceLang: argv.sourceLang,
-                    targetLang: argv.lang,
+                    targetLangs, // Pass array
                     sourceLocale: argv.sourceLocale || argv.sourceLang,
-                    targetLocale: argv.targetLocale || argv.lang,
+                    targetLocales, // Pass array
                     baseUrl: argv.url
                 });
 

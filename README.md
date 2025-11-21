@@ -68,39 +68,17 @@ node src/index.js translate ... --source-lang en --lang es,it --target-locale es
 - All pages will have correct `hreflang` tags pointing to all other versions.
 
 ### Smart Language Switcher
-To ensure your language switcher stays on the same page (e.g., switching from `/about` to `/fr/about`), use this JavaScript snippet.
+The system **automatically injects** a script that makes your language switcher work perfectly. It ensures that when a user clicks "English", they go to the *English version of the current page*, not just the home page.
 
-**1. Add links with `data-lang` attributes:**
-In your Webflow/HTML, add your language links and give them a `data-lang` attribute matching the **locale** you defined (or the language code if you didn't specify a locale).
+**How to use it:**
+In your Webflow/HTML, simply add your language links and give them a `data-lang` attribute matching the **locale** (or language code).
 
 ```html
-<a href="#" class="lang-switch" data-lang="fr-CA">Français</a>
-<a href="#" class="lang-switch" data-lang="en-US">English</a>
+<a href="#" data-lang="fr-CA">Français</a>
+<a href="#" data-lang="en-US">English</a>
 ```
 
-**2. Add this script to your site (Before `</body>`):**
-This script automatically updates the `href` of your buttons to point to the correct translated page.
-
-```javascript
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const switches = document.querySelectorAll('.lang-switch');
-    
-    switches.forEach(link => {
-      const targetLocale = link.getAttribute('data-lang');
-      // Find the corresponding SEO tag
-      const alternate = document.querySelector(`link[hreflang="${targetLocale}"]`);
-      
-      if (alternate) {
-        link.href = alternate.href;
-      } else {
-        console.warn(`No translation found for ${targetLocale}`);
-        link.style.display = 'none'; // Optional: Hide if no translation
-      }
-    });
-  });
-</script>
-```
+**That's it!** The injected script will automatically find the correct URL (from the `hreflang` tags) and update the `href` of these links.
 
 ## Local Development
 
