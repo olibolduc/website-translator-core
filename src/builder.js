@@ -60,6 +60,13 @@ export class Builder {
             }
         }
 
+        // 3. Fix broken image references
+        console.log('🔧 Scanning for image files...');
+        const imageMap = await this.findAllImages(targetDir);
+        console.log(`   Found ${imageMap.size} unique image basenames`);
+
+        // Note: We'll fix HTML files as we process them below
+
         // 4. Find all HTML files
         const htmlFiles = await this.findHtmlFiles(targetDir); // Search in targetDir (base version)
 
@@ -73,6 +80,13 @@ export class Builder {
             if (isInLangDir) continue;
 
             console.log(`📄 Processing ${relativePath}...`);
+
+            // Fix Image References First
+            const fixResult = await this.fixImageReferences(file, imageMap, targetDir);
+            if (fixResult.fixed) {
+                console.log(`   🔧 Fixed ${fixResult.count} image reference(s)`);
+                fixResult.fixes.forEach(fix => console.log(`      ${fix}`));
+            }
 
             // Process Root File (Source Language)
             // Always update its SEO tags
@@ -221,6 +235,40 @@ export class Builder {
         return results;
     }
 
+    async findAllImages(dir) {
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.avif', '.ico'];
+        let imageMap = new Map(); // basename -> full path
+
+        const scan = async (directory) => {
+            const list = await fs.readdir(directory);
+            for (const file of list) {
+                const filePath = path.join(directory, file);
+                const stat = await fs.stat(filePath);
+
+                if (stat && stat.isDirectory()) {
+                    if (file === 'node_modules' || file === '.git' || file.startsWith('.')) continue;
+                    await scan(filePath);
+                } else {
+                    const ext = path.extname(file).toLowerCase();
+                    if (imageExtensions.includes(ext)) {
+                        // Store relative path from dir
+                        const relativePath = path.relative(dir, filePath);
+                        const basename = path.basename(file);
+
+                        // Store with basename as key for quick lookup
+                        if (!imageMap.has(basename)) {
+                            imageMap.set(basename, []);
+                        }
+                        imageMap.get(basename).push(relativePath);
+                    }
+                }
+            }
+        };
+
+        await scan(dir);
+        return imageMap;
+    }
+
     async translateHtml(html, sourceLang, targetLang, targetLocale) {
         const $ = cheerio.load(html);
         const nodesToTranslate = [];
@@ -299,5 +347,125 @@ export class Builder {
         $('html').attr('lang', targetLocale);
 
         return $.html();
+    }
+
+    async fixImageReferences(htmlPath, imageMap, targetDir) {
+        const html = await fs.readFile(htmlPath, 'utf-8');
+        const $ = cheerio.load(html);
+        let fixCount = 0;
+        const fixes = [];
+
+        // Helper: Try to find actual file for a broken reference
+        const findActualFile = (brokenPath) => {
+            const basename = path.basename(brokenPath);
+            const dirname = path.dirname(brokenPath);
+
+            // 1. Check if file exists as-is
+            const fullPath = path.join(targetDir, brokenPath);
+            if (fs.existsSync(fullPath)) {
+                return null; // Not broken, skip
+            }
+
+            // 2. Look for exact basename match
+            if (imageMap.has(basename)) {
+                const candidates = imageMap.get(basename);
+                if (candidates.length === 1) {
+                    return candidates[0];
+                }
+                // Multiple matches, prefer same directory
+                const sameDirMatch = candidates.find(c => path.dirname(c) === dirname);
+                if (sameDirMatch) return sameDirMatch;
+                return candidates[0]; // Fallback to first match
+            }
+
+            // 3. Fuzzy match: Remove version suffixes (_1, _2, etc.)
+            const baseWithoutVersion = basename.replace(/(_\d+)/, ''); // logo_1.avif -> logo.avif
+            if (baseWithoutVersion !== basename && imageMap.has(baseWithoutVersion)) {
+                return imageMap.get(baseWithoutVersion)[0];
+            }
+
+            // 4. Try matching without extension
+            const nameWithoutExt = path.basename(basename, path.extname(basename));
+            for (const [key, paths] of imageMap.entries()) {
+                const keyWithoutExt = path.basename(key, path.extname(key));
+                if (keyWithoutExt === nameWithoutExt) {
+                    return paths[0];
+                }
+            }
+
+            return null; // Could not find
+        };
+
+        // Fix <img src="...">
+        $('img[src]').each((i, elem) => {
+            const src = $(elem).attr('src');
+            const actualFile = findActualFile(src);
+            if (actualFile) {
+                $(elem).attr('src', actualFile);
+                fixes.push(`${src} → ${actualFile}`);
+                fixCount++;
+            }
+        });
+
+        // Fix <img srcset="...">
+        $('img[srcset]').each((i, elem) => {
+            const srcset = $(elem).attr('srcset');
+            const parts = srcset.split(',').map(s => s.trim());
+            let updated = false;
+
+            const newParts = parts.map(part => {
+                const [url, descriptor] = part.split(/\s+/);
+                const actualFile = findActualFile(url);
+                if (actualFile) {
+                    updated = true;
+                    return descriptor ? `${actualFile} ${descriptor}` : actualFile;
+                }
+                return part;
+            });
+
+            if (updated) {
+                $(elem).attr('srcset', newParts.join(', '));
+                fixCount++;
+            }
+        });
+
+        // Fix CSS background-image in <style> and inline styles
+        $('style').each((i, elem) => {
+            let css = $(elem).html();
+            const urlRegex = /url\(['"]?([^'"()]+)['"]?\)/g;
+            css = css.replace(urlRegex, (match, url) => {
+                const actualFile = findActualFile(url);
+                if (actualFile) {
+                    fixes.push(`${url} → ${actualFile} (CSS)`);
+                    fixCount++;
+                    return `url('${actualFile}')`;
+                }
+                return match;
+            });
+            $(elem).html(css);
+        });
+
+        // Fix inline styles
+        $('[style*="url("]').each((i, elem) => {
+            let style = $(elem).attr('style');
+            const urlRegex = /url\(['"]?([^'"()]+)['"]?\)/g;
+            style = style.replace(urlRegex, (match, url) => {
+                const actualFile = findActualFile(url);
+                if (actualFile) {
+                    fixCount++;
+                    return `url('${actualFile}')`;
+                }
+                return match;
+            });
+            $(elem).attr('style', style);
+        });
+
+        // Save if changes were made
+        if (fixCount > 0) {
+            await fs.writeFile(htmlPath, $.html());
+            return { fixed: true, count: fixCount, fixes };
+        }
+
+        return { fixed: false, count: 0, fixes: [] };
     }
 }
