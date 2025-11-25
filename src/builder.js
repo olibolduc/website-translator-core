@@ -130,6 +130,9 @@ export class Builder {
                 const content = await fs.readFile(file, 'utf-8');
                 let translatedContent = await this.translateHtml(content, sourceLang, targetLang, targetLocale);
 
+                // Fix anchor links to include language prefix
+                translatedContent = this.fixAnchorLinks(translatedContent, targetLang);
+
                 // Inject Smart Switcher Script (Translated)
                 translatedContent = await this.injectSmartSwitcherScript(translatedContent);
 
@@ -223,6 +226,21 @@ export class Builder {
         // 4. Write to output
         await fs.writeFile(path.join(targetDir, '_redirects'), content);
         console.log('   ✅ _redirects file created/updated');
+    }
+
+    fixAnchorLinks(html, targetLang) {
+        const $ = cheerio.load(html);
+
+        // Find all links that start with /# (anchor links to root)
+        $('a[href^="/#"]').each((i, el) => {
+            const $el = $(el);
+            const href = $el.attr('href');
+            // Transform /#section to /lang/#section
+            const newHref = `/${targetLang}${href}`;
+            $el.attr('href', newHref);
+        });
+
+        return $.html();
     }
 
     async injectSmartSwitcherScript(html) {
