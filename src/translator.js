@@ -92,8 +92,20 @@ export class Translator {
                 console.warn(`   Error: ${error.message}`); // Log specific error
 
                 if (attempt === retries) {
-                    console.error("❌ All retries failed. Skipping this chunk.");
-                    console.error("Failed texts:", texts);
+                    // Adaptive splitting: If it fails, try splitting the chunk in half
+                    if (texts.length > 1) {
+                        console.log(`✂️  Splitting failing chunk of ${texts.length} items into two halves...`);
+                        const mid = Math.floor(texts.length / 2);
+                        const firstHalf = texts.slice(0, mid);
+                        const secondHalf = texts.slice(mid);
+
+                        // Recursively process the halves with a fresh set of retries
+                        await this.processChunkWithRetry(firstHalf, sourceLang, targetLang, retries);
+                        await this.processChunkWithRetry(secondHalf, sourceLang, targetLang, retries);
+                    } else {
+                        console.error("❌ Failed to translate item even after splitting down to single item.");
+                        console.error("Item:", texts[0]);
+                    }
                 } else {
                     // Exponential backoff: 1s, 2s, 4s...
                     const delay = 1000 * Math.pow(2, attempt - 1);
