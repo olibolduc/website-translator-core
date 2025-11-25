@@ -68,7 +68,8 @@ export class Translator {
             console.log(`🤖 Translating ${missingTexts.length} new segments with Gemini...`);
 
             // Split into chunks to avoid hitting token limits
-            const chunkSize = 50;
+            // Reduced to 20 to improve stability with Flash Lite models
+            const chunkSize = 20;
             for (let i = 0; i < missingTexts.length; i += chunkSize) {
                 const chunk = missingTexts.slice(i, i + chunkSize);
                 await this.processChunkWithRetry(chunk, sourceLang, targetLang);
@@ -88,6 +89,8 @@ export class Translator {
                 return; // Success!
             } catch (error) {
                 console.warn(`⚠️  Attempt ${attempt}/${retries} failed for chunk of ${texts.length} items.`);
+                console.warn(`   Error: ${error.message}`); // Log specific error
+
                 if (attempt === retries) {
                     console.error("❌ All retries failed. Skipping this chunk.");
                     console.error("Failed texts:", texts);
