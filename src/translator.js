@@ -9,7 +9,7 @@ export class Translator {
             throw new Error("GEMINI_API_KEY is not defined in environment variables");
         }
         this.genAI = new GoogleGenerativeAI(apiKey);
-        this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
         this.cache = {};
         this.cacheFile = cachePath || 'translations.json';
         this.loadCache();
