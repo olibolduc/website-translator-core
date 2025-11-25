@@ -313,6 +313,9 @@ export class Builder {
             // Skip script and style tags (e.g. JSON-LD, custom CSS)
             if ($el.is('script') || $el.is('style') || $el.is('noscript')) return;
 
+            // Skip language switcher links (they have data-lang attribute)
+            if ($el.attr('data-lang')) return;
+
             const hasElementChildren = $el.children().length > 0;
 
             if (!hasElementChildren) {

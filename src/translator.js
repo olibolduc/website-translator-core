@@ -86,6 +86,9 @@ export class Translator {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
                 await this.processChunk(texts, sourceLang, targetLang);
+                if (attempt > 1) {
+                    console.log(`✅ Retry successful on attempt ${attempt}`);
+                }
                 return; // Success!
             } catch (error) {
                 console.warn(`⚠️  Attempt ${attempt}/${retries} failed for chunk of ${texts.length} items.`);
