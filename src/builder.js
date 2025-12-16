@@ -105,6 +105,9 @@ export class Builder {
             let $root = cheerio.load(rootContent);
             $root('html').attr('lang', sourceLocale);
 
+            // Update Language Switcher State (Static)
+            this.updateLanguageSwitcher($root, sourceLocale);
+
             // Inject Smart Switcher Script (Root)
             let rootHtml = $root.html();
             rootHtml = await this.injectSmartSwitcherScript(rootHtml);
@@ -250,15 +253,22 @@ export class Builder {
       document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('a[data-lang]').forEach(link => {
           const locale = link.getAttribute('data-lang');
+          // Handle link implementation
           const alternate = document.querySelector('link[hreflang="' + locale + '"]');
-          if (alternate) {
+          if (alternate && link.tagName === 'A') {
             link.href = alternate.href;
           }
-          
-          // Mark active language
+        });
+
+        // Update all language elements (links and text)
+        document.querySelectorAll('[data-lang]').forEach(el => {
+          const locale = el.getAttribute('data-lang');
           const currentLang = document.documentElement.lang;
+          
           if (locale === currentLang || (currentLang.startsWith(locale + '-'))) {
-            link.classList.add('current-lang');
+            el.classList.add('current-lang');
+          } else {
+            el.classList.remove('current-lang');
           }
         });
       });
@@ -422,6 +432,9 @@ export class Builder {
             }
         });
 
+        // Update Language Switcher State (Static)
+        this.updateLanguageSwitcher($, targetLocale);
+
         return $.html();
     }
 
@@ -543,5 +556,20 @@ export class Builder {
         }
 
         return { fixed: false, count: 0, fixes: [] };
+        return { fixed: false, count: 0, fixes: [] };
+    }
+
+    updateLanguageSwitcher($, currentLocale) {
+        $('[data-lang]').each((i, el) => {
+            const $el = $(el);
+            const locale = $el.attr('data-lang');
+
+            // Check for match (exact or prefix for sub-locales)
+            if (locale === currentLocale || currentLocale.startsWith(locale + '-')) {
+                $el.addClass('current-lang');
+            } else {
+                $el.removeClass('current-lang');
+            }
+        });
     }
 }
