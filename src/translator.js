@@ -131,6 +131,7 @@ Rules:
 4. Only keep specific brand names (like "Espace Urbain Studio") in the original language.
 5. Format currency correctly for the target language (e.g., "50$" -> "$50" in English).
 6. Return ONLY a JSON array of strings.
+7. CRITICAL: Preserve all leading and trailing whitespace from the source strings exactly in the translations. (e.g., " Hello " -> " Hola ")
       
       Input texts:
       ${JSON.stringify(texts)}
