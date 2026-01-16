@@ -88,6 +88,13 @@ export class Builder {
                 fixResult.fixes.forEach(fix => console.log(`      ${fix}`));
             }
 
+            // Normalize image sizes attributes
+            const sizesResult = await this.normalizeSizesAttributes(file, targetDir);
+            if (sizesResult.fixed) {
+                console.log(`   📐 Normalized ${sizesResult.count} image sizes attribute(s)`);
+                sizesResult.fixes.forEach(fix => console.log(`      ${fix}`));
+            }
+
             // Process Root File (Source Language)
             // Always update its SEO tags
             await injectSeoTags({
@@ -556,6 +563,56 @@ export class Builder {
         }
 
         return { fixed: false, count: 0, fixes: [] };
+    }
+
+    async normalizeSizesAttributes(htmlPath, targetDir) {
+        const html = await fs.readFile(htmlPath, 'utf-8');
+        const $ = cheerio.load(html);
+        let fixCount = 0;
+        const fixes = [];
+
+        // Pattern to detect sizes attributes that END with fixed pixel values
+        // This pattern matches: "...240px" or "...239.9921875px" but NOT "(max-width: 479px) 90vw"
+        // The key is to match pixel values that are NOT inside parentheses (media queries)
+        const fixedPixelPattern = /,\s*\d+(\.\d+)?px\s*$/;
+
+        $('img[sizes]').each((i, elem) => {
+            const currentSizes = $(elem).attr('sizes');
+
+            // Check if sizes ends with a fixed pixel value (after a comma)
+            // OR if it's ONLY a pixel value with no media queries
+            const endsWithPixels = fixedPixelPattern.test(currentSizes);
+            const onlyPixels = /^\s*\d+(\.\d+)?px\s*$/.test(currentSizes);
+
+            if (endsWithPixels || onlyPixels) {
+                const $wrapper = $(elem).closest('[class*="wrapper"]');
+                const wrapperClass = $wrapper.attr('class') || '';
+
+                let newSizes;
+                if (wrapperClass.includes('gallery8_image-wrapper-large') ||
+                    wrapperClass.includes('gallery8_image-wrapper')) {
+                    newSizes = '(max-width: 767px) 90vw, (max-width: 991px) 45vw, 40vw';
+                } else if (wrapperClass.includes('layout408_image-wrapper') ||
+                    wrapperClass.includes('layout493_image-wrapper')) {
+                    newSizes = '(max-width: 479px) 100vw, (max-width: 991px) 90vw, 40vw';
+                } else if (wrapperClass.includes('header30_background-image-wrapper')) {
+                    newSizes = '100vw';
+                } else {
+                    // Default responsive sizes
+                    newSizes = '(max-width: 767px) 90vw, (max-width: 991px) 45vw, 40vw';
+                }
+
+                $(elem).attr('sizes', newSizes);
+                fixes.push(`${currentSizes} → ${newSizes}`);
+                fixCount++;
+            }
+        });
+
+        if (fixCount > 0) {
+            await fs.writeFile(htmlPath, $.html());
+            return { fixed: true, count: fixCount, fixes };
+        }
+
         return { fixed: false, count: 0, fixes: [] };
     }
 
