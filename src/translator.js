@@ -70,14 +70,22 @@ export class Translator {
             // Split into chunks to avoid hitting token limits
             // Reduced to 20 to improve stability with Flash Lite models
             const chunkSize = 20;
+            let consecutiveFailures = 0;
+            const FAILURE_THRESHOLD = 3;
+
             for (let i = 0; i < missingTexts.length; i += chunkSize) {
+                // Circuit Breaker Check
+                if (consecutiveFailures >= FAILURE_THRESHOLD) {
+                    throw new Error(`💥 Circuit Breaker Triggered: Failed to translate ${consecutiveFailures} consecutive chunks. Aborting build to protect API quota.`);
+                }
+
                 const chunk = missingTexts.slice(i, i + chunkSize);
-                await this.processChunkWithRetry(chunk, sourceLang, targetLang);
-                
-                // Rate Limiting: Wait 4 seconds between chunks to avoid hitting 15 RPM limits
-                if (i + chunkSize < missingTexts.length) {
-                    console.log('⏳ Rate limiting: Waiting 4s before next batch...');
-                    await new Promise(r => setTimeout(r, 4000));
+                const success = await this.processChunkWithRetry(chunk, sourceLang, targetLang);
+
+                if (success) {
+                    consecutiveFailures = 0;
+                } else {
+                    consecutiveFailures++;
                 }
             }
 
@@ -95,7 +103,7 @@ export class Translator {
                 if (attempt > 1) {
                     console.log(`✅ Retry successful on attempt ${attempt}`);
                 }
-                return; // Success!
+                return true; // Success!
             } catch (error) {
                 console.warn(`⚠️  Attempt ${attempt}/${retries} failed for chunk of ${texts.length} items.`);
                 console.warn(`   Error: ${error.message}`); // Log specific error
@@ -109,11 +117,14 @@ export class Translator {
                         const secondHalf = texts.slice(mid);
 
                         // Recursively process the halves with a fresh set of retries
-                        await this.processChunkWithRetry(firstHalf, sourceLang, targetLang, retries);
-                        await this.processChunkWithRetry(secondHalf, sourceLang, targetLang, retries);
+                        const success1 = await this.processChunkWithRetry(firstHalf, sourceLang, targetLang, retries);
+                        const success2 = await this.processChunkWithRetry(secondHalf, sourceLang, targetLang, retries);
+
+                        return success1 && success2;
                     } else {
                         console.error("❌ Failed to translate item even after splitting down to single item.");
                         console.error("Item:", texts[0]);
+                        return false; // Final failure for this chunk
                     }
                 } else {
                     // Exponential backoff: 1s, 2s, 4s...
@@ -123,6 +134,7 @@ export class Translator {
                 }
             }
         }
+        return false; // Should actally be covered by the loop logic, but for safety
     }
 
     async processChunk(texts, sourceLang, targetLang) {
