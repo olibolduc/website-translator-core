@@ -73,6 +73,12 @@ export class Translator {
             for (let i = 0; i < missingTexts.length; i += chunkSize) {
                 const chunk = missingTexts.slice(i, i + chunkSize);
                 await this.processChunkWithRetry(chunk, sourceLang, targetLang);
+                
+                // Rate Limiting: Wait 4 seconds between chunks to avoid hitting 15 RPM limits
+                if (i + chunkSize < missingTexts.length) {
+                    console.log('⏳ Rate limiting: Waiting 4s before next batch...');
+                    await new Promise(r => setTimeout(r, 4000));
+                }
             }
 
             this.saveCache();
