@@ -36,6 +36,9 @@ export async function injectSeoTags({ filePath, baseUrl, currentLang, currentLoc
             }
             $('head').append(`<link rel="alternate" hreflang="${langConfig.locale}" href="${href}">`);
         });
+
+        // x-default: recommended by Google, points to the original version
+        $('head').append(`<link rel="alternate" hreflang="x-default" href="${baseUrl}/${cleanPath}">`);
     }
 
     await fs.writeFile(filePath, $.html());
@@ -48,6 +51,9 @@ export async function generateGlobalSitemap(targetDir, baseUrl) {
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
     for (const file of files) {
+        // Skip error pages
+        if (path.basename(file) === '404.html') continue;
+
         const content = await fs.readFile(file, 'utf-8');
         // Skip noindex pages
         if (content.match(/<meta\s+name=["']robots["']\s+content=["'].*noindex.*["']/i)) continue;
@@ -57,9 +63,7 @@ export async function generateGlobalSitemap(targetDir, baseUrl) {
 
         // Clean URL
         let finalUrl = `${baseUrl}/${urlPath}`;
-        if (finalUrl.endsWith('index.html')) {
-            finalUrl = finalUrl.replace('index.html', '');
-        }
+        finalUrl = finalUrl.replace(/index\.html$/, '');
         if (finalUrl.endsWith('/')) {
             finalUrl = finalUrl.slice(0, -1);
         }

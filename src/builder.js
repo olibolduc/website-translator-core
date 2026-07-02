@@ -3,9 +3,22 @@ import path from 'path';
 import * as cheerio from 'cheerio';
 import { injectSeoTags, generateGlobalSitemap } from './seo.js';
 
+// Items that must never be copied into the published output
+// (repo/tooling files that would otherwise become publicly accessible)
+const EXCLUDED_ITEMS = [
+    '.git', '.github', 'node_modules', 'dist', 'dist-full', 'engine',
+    'translations.json', 'translator.config.json',
+    'README.md', '.gitignore', 'package.json', 'package-lock.json'
+];
+
+function isExcludedItem(item) {
+    return EXCLUDED_ITEMS.includes(item) || item.startsWith('.env');
+}
+
 export class Builder {
-    constructor(translator) {
+    constructor(translator, config = {}) {
         this.translator = translator;
+        this.config = config;
     }
 
     async build({ sourceDir, targetDir, sourceLang, targetLangs, sourceLocale, targetLocales, baseUrl }) {
@@ -21,7 +34,7 @@ export class Builder {
 
         for (const item of items) {
             // Skip system/output folders
-            if (['.git', 'node_modules', '.env', 'dist', 'dist-full', 'engine'].includes(item)) continue;
+            if (isExcludedItem(item)) continue;
 
             const srcPath = path.join(sourceDir, item);
             const destPath = path.join(targetDir, item);
@@ -140,8 +153,8 @@ export class Builder {
                 const content = await fs.readFile(file, 'utf-8');
                 let translatedContent = await this.translateHtml(content, sourceLang, targetLang, targetLocale);
 
-                // Fix anchor links to include language prefix
-                translatedContent = this.fixAnchorLinks(translatedContent, targetLang);
+                // Prefix internal links with the language so navigation stays in-language
+                translatedContent = this.localizeInternalLinks(translatedContent, targetLang);
 
                 // Inject Smart Switcher Script (Translated)
                 translatedContent = await this.injectSmartSwitcherScript(translatedContent);
@@ -177,7 +190,7 @@ export class Builder {
 
                 for (const item of assetItems) {
                     // Skip system/output folders
-                    if (['.git', 'node_modules', '.env', 'dist', 'dist-full', 'engine'].includes(item)) continue;
+                    if (isExcludedItem(item)) continue;
 
                     const srcPath = path.join(sourceDir, item);
                     const destPath = path.join(langDir, item);
@@ -204,6 +217,13 @@ export class Builder {
 
         // 8. Handle Redirects (404s)
         await this.handleRedirects(sourceDir, targetDir, targetLangs);
+
+        // 9. Fail if translations are missing, instead of silently deploying
+        // pages with source-language text. Successful chunks are already cached,
+        // so a re-run only retries the failed segments.
+        if (this.translator.missingCount > 0) {
+            throw new Error(`${this.translator.missingCount} segment(s) could not be translated. Aborting to avoid deploying mixed-language pages. Re-run the build to retry only the failed segments (successful ones are cached).`);
+        }
 
         console.log(`✨ Build complete! Output: ${targetDir}`);
     }
@@ -238,16 +258,36 @@ export class Builder {
         console.log('   ✅ _redirects file created/updated');
     }
 
-    fixAnchorLinks(html, targetLang) {
+    localizeInternalLinks(html, targetLang) {
         const $ = cheerio.load(html);
+        // Extensions that point to shared assets rather than pages; those must
+        // keep their root path so all languages reference a single copy
+        const assetExtensions = [
+            '.css', '.js', '.json', '.xml', '.txt', '.pdf',
+            '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.ico',
+            '.mp4', '.webm', '.mp3', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.zip'
+        ];
 
-        // Find all links that start with /# (anchor links to root)
-        $('a[href^="/#"]').each((i, el) => {
+        $('a[href]').each((i, el) => {
             const $el = $(el);
+
+            // Language switcher links are handled by the smart switcher script
+            if ($el.attr('data-lang')) return;
+
             const href = $el.attr('href');
-            // Transform /#section to /lang/#section
-            const newHref = `/${targetLang}${href}`;
-            $el.attr('href', newHref);
+
+            // Only rewrite root-relative internal links (skip external, protocol-relative,
+            // anchors, mailto:, tel:, and relative paths which already resolve inside /lang/)
+            if (!href || !href.startsWith('/') || href.startsWith('//')) return;
+
+            // Already language-prefixed
+            if (href === `/${targetLang}` || href.startsWith(`/${targetLang}/`) || href.startsWith(`/${targetLang}#`)) return;
+
+            const pathPart = href.split(/[?#]/)[0];
+            const ext = path.extname(pathPart).toLowerCase();
+            if (assetExtensions.includes(ext)) return;
+
+            $el.attr('href', `/${targetLang}${href}`);
         });
 
         return $.html();
@@ -255,8 +295,15 @@ export class Builder {
 
     async injectSmartSwitcherScript(html) {
         const $ = cheerio.load(html);
+
+        // Idempotent: translated pages are generated from the root file which
+        // already contains the script, so don't inject it twice
+        if ($('script[data-smart-switcher]').length > 0) {
+            return $.html();
+        }
+
         const script = `
-    <script>
+    <script data-smart-switcher>
       document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('a[data-lang]').forEach(link => {
           const locale = link.getAttribute('data-lang');
@@ -453,6 +500,12 @@ export class Builder {
 
         // Helper: Try to find actual file for a broken reference
         const findActualFile = (brokenPath) => {
+            // Never touch external URLs, protocol-relative URLs or data URIs:
+            // basename-matching them against local files would corrupt valid references
+            if (!brokenPath || /^(data:|blob:|[a-z][a-z0-9+.-]*:|\/\/)/i.test(brokenPath)) {
+                return null;
+            }
+
             const basename = path.basename(brokenPath);
             const dirname = path.dirname(brokenPath);
 
@@ -588,19 +641,18 @@ export class Builder {
                 const $wrapper = $(elem).closest('[class*="wrapper"]');
                 const wrapperClass = $wrapper.attr('class') || '';
 
-                let newSizes;
-                if (wrapperClass.includes('gallery8_image-wrapper-large') ||
-                    wrapperClass.includes('gallery8_image-wrapper')) {
-                    newSizes = '(max-width: 767px) 90vw, (max-width: 991px) 45vw, 40vw';
-                } else if (wrapperClass.includes('layout408_image-wrapper') ||
-                    wrapperClass.includes('layout493_image-wrapper')) {
-                    newSizes = '(max-width: 479px) 100vw, (max-width: 991px) 90vw, 40vw';
-                } else if (wrapperClass.includes('header30_background-image-wrapper')) {
-                    newSizes = '100vw';
-                } else {
-                    // Default responsive sizes
-                    newSizes = '(max-width: 767px) 90vw, (max-width: 991px) 45vw, 40vw';
-                }
+                // Site-specific rules come from translator.config.json:
+                // { "sizes": { "default": "...", "overrides": [{ "classContains": "...", "sizes": "..." }] } }
+                const sizesConfig = this.config.sizes || {};
+                const overrides = sizesConfig.overrides || [];
+
+                const override = overrides.find(o =>
+                    o.classContains && wrapperClass.includes(o.classContains)
+                );
+
+                const newSizes = override
+                    ? override.sizes
+                    : (sizesConfig.default || '(max-width: 767px) 90vw, (max-width: 991px) 45vw, 40vw');
 
                 $(elem).attr('sizes', newSizes);
                 fixes.push(`${currentSizes} → ${newSizes}`);
