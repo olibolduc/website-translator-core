@@ -46,6 +46,27 @@ After the build completes, you can:
 rm -f site-test/translations.json && node website-translator-core/src/index.js translate site-test dist-output --source-lang fr --lang en --url https://espaceurbain.ca
 ```
 
+## Site Config (optional):
+Add a `translator.config.json` in the source directory to customize the build:
+```json
+{
+  "brandNames": ["My Studio Name"],
+  "sizes": {
+    "default": "(max-width: 767px) 90vw, (max-width: 991px) 45vw, 40vw",
+    "overrides": [
+      { "classContains": "header30_background-image-wrapper", "sizes": "100vw" }
+    ]
+  }
+}
+```
+- `brandNames`: kept in the original language during translation
+- `sizes`: rules used to normalize fixed-pixel `sizes` attributes on images
+
+## Failure Behavior:
+If some segments cannot be translated after retries, the build **fails** instead
+of deploying pages with mixed languages. Successful segments are already cached,
+so simply re-run the build to retry only the failed ones.
+
 ## Tips:
 - Use the **same source directory** for repeated builds to benefit from caching
 - The cache is stored IN the source directory, so it persists across builds

@@ -3,7 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 
 export class Translator {
-    constructor(cachePath) {
+    constructor(cachePath, options = {}) {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             throw new Error("GEMINI_API_KEY is not defined in environment variables");
@@ -12,6 +12,8 @@ export class Translator {
         this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
         this.cache = {};
         this.cacheFile = cachePath || 'translations.json';
+        this.brandNames = options.brandNames || [];
+        this.missingCount = 0;
         this.loadCache();
     }
 
@@ -73,23 +75,35 @@ export class Translator {
             let consecutiveFailures = 0;
             const FAILURE_THRESHOLD = 3;
 
-            for (let i = 0; i < missingTexts.length; i += chunkSize) {
-                // Circuit Breaker Check
-                if (consecutiveFailures >= FAILURE_THRESHOLD) {
-                    throw new Error(`💥 Circuit Breaker Triggered: Failed to translate ${consecutiveFailures} consecutive chunks. Aborting build to protect API quota.`);
-                }
+            try {
+                for (let i = 0; i < missingTexts.length; i += chunkSize) {
+                    // Circuit Breaker Check
+                    if (consecutiveFailures >= FAILURE_THRESHOLD) {
+                        throw new Error(`💥 Circuit Breaker Triggered: Failed to translate ${consecutiveFailures} consecutive chunks. Aborting build to protect API quota.`);
+                    }
 
-                const chunk = missingTexts.slice(i, i + chunkSize);
-                const success = await this.processChunkWithRetry(chunk, sourceLang, targetLang);
+                    const chunk = missingTexts.slice(i, i + chunkSize);
+                    const success = await this.processChunkWithRetry(chunk, sourceLang, targetLang);
 
-                if (success) {
-                    consecutiveFailures = 0;
-                } else {
-                    consecutiveFailures++;
+                    if (success) {
+                        consecutiveFailures = 0;
+                    } else {
+                        consecutiveFailures++;
+                    }
                 }
+            } finally {
+                // Always persist successful chunks, even if the circuit breaker aborts,
+                // so a re-run only retries what actually failed
+                this.saveCache();
             }
 
-            this.saveCache();
+            // Track segments that are still untranslated so the build can be failed
+            // instead of silently shipping source-language text
+            const stillMissing = missingTexts.filter(t => !this.get(t, targetLang));
+            if (stillMissing.length > 0) {
+                this.missingCount += stillMissing.length;
+                console.warn(`⚠️  ${stillMissing.length} segment(s) could not be translated to "${targetLang}"`);
+            }
         }
 
         // Return all translations (cached + new)
@@ -138,6 +152,10 @@ export class Translator {
     }
 
     async processChunk(texts, sourceLang, targetLang) {
+        const brandRule = this.brandNames.length > 0
+            ? `Keep brand names in the original language, in particular: ${this.brandNames.map(n => `"${n}"`).join(', ')}.`
+            : `Keep brand names and proper nouns in the original language.`;
+
         const prompt = `
       You are a professional website translator.
       Translate the following array of texts from ${sourceLang} into ${targetLang}.
@@ -146,11 +164,11 @@ Rules:
 1. Maintain the tone and style of the original text.
 2. Preserve all HTML entities, variables, or special characters exactly as they are.
 3. Translate all headings, buttons, navigation items, and UI elements (e.g., "Règlements" -> "Rules", "Accueil" -> "Home").
-4. Only keep specific brand names (like "Espace Urbain Studio") in the original language.
+4. ${brandRule}
 5. Format currency correctly for the target language (e.g., "50$" -> "$50" in English).
 6. Return ONLY a JSON array of strings.
 7. CRITICAL: Preserve all leading and trailing whitespace from the source strings exactly in the translations. (e.g., " Hello " -> " Hola ")
-      
+
       Input texts:
       ${JSON.stringify(texts)}
 `;

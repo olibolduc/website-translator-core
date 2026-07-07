@@ -65,10 +65,18 @@ yargs(hideBin(process.argv))
                     throw new Error(`Source directory not found: ${sourceDir}`);
                 }
 
+                // Optional site-specific config (brand names, sizes overrides, ...)
+                const configPath = path.join(sourceDir, 'translator.config.json');
+                let siteConfig = {};
+                if (fs.existsSync(configPath)) {
+                    siteConfig = fs.readJsonSync(configPath);
+                    console.log(`⚙️  Loaded site config from ${configPath}`);
+                }
+
                 // Save translations.json in the source directory so it persists in the site repo
                 const cachePath = path.join(sourceDir, 'translations.json');
-                const translator = new Translator(cachePath);
-                const builder = new Builder(translator);
+                const translator = new Translator(cachePath, { brandNames: siteConfig.brandNames });
+                const builder = new Builder(translator, siteConfig);
 
                 const targetLangs = argv.lang.split(',').map(s => s.trim());
                 const targetLocales = (argv.targetLocale || argv.lang).split(',').map(s => s.trim());

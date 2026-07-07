@@ -62,29 +62,35 @@ jobs:
       - name: Translate and Build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Pass inputs through env vars instead of interpolating them into the
+          # shell script, which would allow command injection via inputs
+          SOURCE_LANG: ${{ inputs.source-lang }}
+          SOURCE_LOCALE: ${{ inputs.source-locale }}
+          TARGET_LANG: ${{ inputs.target-lang }}
+          TARGET_LOCALE: ${{ inputs.target-locale }}
+          SITE_URL: ${{ inputs.site-url }}
         run: |
           # Run the translator from the engine directory against the site root
           # Source = .. (Site Root)
           # Target = ../dist (Output)
           cd engine
-          
-          # Build command with conditional locale parameters
-          CMD="node src/index.js translate .. ../dist --source-lang ${{ inputs.source-lang }} --lang ${{ inputs.target-lang }} --url ${{ inputs.site-url }}"
-          
-          # Add source-locale if provided
-          if [ -n "${{ inputs.source-locale }}" ]; then
-            CMD="$CMD --source-locale ${{ inputs.source-locale }}"
+
+          ARGS=(node src/index.js translate .. ../dist --source-lang "$SOURCE_LANG" --lang "$TARGET_LANG" --url "$SITE_URL")
+
+          if [ -n "$SOURCE_LOCALE" ]; then
+            ARGS+=(--source-locale "$SOURCE_LOCALE")
           fi
-          
-          # Add target-locale if provided
-          if [ -n "${{ inputs.target-locale }}" ]; then
-            CMD="$CMD --target-locale ${{ inputs.target-locale }}"
+
+          if [ -n "$TARGET_LOCALE" ]; then
+            ARGS+=(--target-locale "$TARGET_LOCALE")
           fi
-          
-          # Execute the command
-          eval $CMD
+
+          "${ARGS[@]}"
 
       - name: Commit Translations Cache
+        # Run even if the build failed: successful chunks are already written to
+        # the cache, so committing it means a re-run only retries failed segments
+        if: ${{ !cancelled() }}
         run: |
           cd engine
           # translations.json is now written directly to the site root (..) by the engine
